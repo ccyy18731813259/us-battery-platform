@@ -34,7 +34,18 @@ st.markdown("""
             background: linear-gradient(120deg, #12355B 0%, #1D5A8A 60%, #2E86AB 100%); }
     .hero h1 { color: #ffffff; font-size: 26px; font-weight: 700; margin: 0; letter-spacing: 1px; }
     .hero p  { color: rgba(255,255,255,.82); font-size: 13.5px; margin: 6px 0 0; }
-    /* KPI 卡片 */
+    /* KPI 卡片（自绘，保证数值完整显示、永不出现省略号） */
+    .kpi-row { display: flex; flex-wrap: wrap; gap: 12px; margin: 2px 0 4px; }
+    .kpi { flex: 1 1 180px; min-width: 172px; background: #ffffff; border: 1px solid #E8E6E0;
+           border-radius: 12px; padding: 16px 18px 12px; box-shadow: 0 1px 3px rgba(0,0,0,.04); }
+    .kpi-label { color: #6B6B68; font-size: 13px; margin-bottom: 6px; white-space: normal; word-break: break-word; }
+    .kpi-value { color: #1A1A1A; font-weight: 700; font-size: clamp(1.1rem, 1.75vw, 1.55rem);
+                 line-height: 1.3; white-space: normal; overflow-wrap: anywhere; word-break: break-word; }
+    .kpi-delta { font-size: 12.5px; margin-top: 6px; white-space: normal; overflow-wrap: anywhere; }
+    .kpi-delta .pd-neg { color: #C0392B; font-weight: 600; }
+    .kpi-delta .pd-pos { color: #1E8449; font-weight: 600; }
+    .kpi-delta .pd-flat { color: #6B6B68; }
+    /* 旧版 st.metric 样式（其他页备用） */
     div[data-testid="stMetric"] { background: #ffffff; border: 1px solid #E8E6E0;
         border-radius: 12px; padding: 16px 18px 12px; box-shadow: 0 1px 3px rgba(0,0,0,.04); }
     div[data-testid="stMetric"] label { color: #6B6B68 !important; font-size: 13px !important; }
@@ -167,8 +178,6 @@ with st.sidebar:
         '<b>数据口径</b><br>'
         '· 金额：一般进口海关价值（美元），接近 FOB 价<br>'
         '· 国家：原产国（Country of Origin）<br>'
-        '· 数量：进口件数接口未提供，以海运+空运毛重（kg）作为重量参考<br>'
-        '· 单价：金额÷毛重（美元/千克），为近似指标<br>'
         '· 州 = 申报目的地州；口岸 = 卸货口岸<br><br>'
         f'<b>数据范围</b>：{MONTHS[0]} ~ {LAST_M}，{len(mat.columns)} 个原产国</p>',
         unsafe_allow_html=True)
@@ -264,20 +273,28 @@ with tab1:
     china_share_last = share.loc[LAST_M, "中国"] if "中国" in share.columns else np.nan
     china_share_yoy = china_share_last - (share.loc[MONTHS[-13], "中国"] if len(MONTHS) > 13 else np.nan)
 
-    k1, k2, k3, k4, k5 = st.columns(5)
-    k1.metric(f"{LAST_M} 当月进口额", f"{tot.loc[LAST_M]/1e8:.2f} 亿美元",
-              f"{yoy_tot.loc[LAST_M]:+.1f}% 同比" if pd.notna(yoy_tot.loc[LAST_M]) else None,
-              border=True)
-    k2.metric(f"{LAST_M} 中国份额", f"{china_share_last:.1f}%",
-              f"{china_share_yoy:+.1f} pp 较去年同期", border=True,
-              delta_color="off")
-    k3.metric("CR5 集中度", f"{conc.loc[LAST_M,'CR5']:.1f}%",
-              f"12个月前 {conc.loc[MONTHS[-13],'CR5']:.1f}%" if len(MONTHS) > 13 else None,
-              delta_color="off", border=True)
-    k4.metric("HHI 指数", f"{conc.loc[LAST_M,'HHI']:.3f}",
-              "0-1，越高越集中", delta_color="off", border=True)
-    k5.metric("近12个月累计进口", f"{tot.loc[sel_range[-12:] if len(sel_range)>=12 else sel_range].sum()/1e9:.2f} 十亿美元",
-              border=True)
+    def _delta_html(text, kind):
+        if not text:
+            return ""
+        return f'<div class="kpi-delta"><span class="pd-{kind}">{text}</span></div>'
+
+    _v1 = f"{tot.loc[LAST_M]/1e8:,.2f} 亿美元"
+    _d1 = f"{yoy_tot.loc[LAST_M]:+.1f}% 同比" if pd.notna(yoy_tot.loc[LAST_M]) else None
+    _v5 = f"{tot.loc[sel_range[-12:] if len(sel_range)>=12 else sel_range].sum()/1e8:,.1f} 亿美元"
+    kpi_html = f"""
+<div class="kpi-row">
+  <div class="kpi"><div class="kpi-label">{LAST_M} 当月进口额</div>
+    <div class="kpi-value">{_v1}</div>{_delta_html(_d1, "neg" if (_d1 and not _d1.startswith("+")) else "pos")}</div>
+  <div class="kpi"><div class="kpi-label">{LAST_M} 中国份额</div>
+    <div class="kpi-value">{china_share_last:.1f}%</div>{_delta_html(f"{china_share_yoy:+.1f} pp 较去年同期", "flat")}</div>
+  <div class="kpi"><div class="kpi-label">CR5 集中度</div>
+    <div class="kpi-value">{conc.loc[LAST_M,'CR5']:.1f}%</div>{_delta_html(f"12个月前 {conc.loc[MONTHS[-13],'CR5']:.1f}%" if len(MONTHS) > 13 else None, "flat")}</div>
+  <div class="kpi"><div class="kpi-label">HHI 指数</div>
+    <div class="kpi-value">{conc.loc[LAST_M,'HHI']:.3f}</div>{_delta_html("0-1，越高越集中", "flat")}</div>
+  <div class="kpi"><div class="kpi-label">近12个月累计进口</div>
+    <div class="kpi-value">{_v5}</div></div>
+</div>"""
+    st.markdown(kpi_html, unsafe_allow_html=True)
 
     sec("美国锂离子电池进口总额走势",
         "柱状为当月进口额（左轴），折线为 12 个月滚动累计（右轴），红色虚线为 2024 年 301 关税调整")
@@ -636,7 +653,6 @@ with tab7:
 | 金额口径 | 一般进口海关价值（Customs Value），接近 FOB 价，不含国际运费、保险费与美国进口关税 |
 | 国家口径 | **原产国**（Country of Origin），非起运国 |
 | 时间范围 | 2017-01 起（月度），随 API 发布自动延伸 |
-| 重量口径 | 海运（VES_WGT_MO）/ 空运（AIR_WGT_MO）毛重（kg，含包装）；件数接口未提供 |
 | 州与口岸 | 州 = 申报目的地州（STATE 缩写自动映射全名）；口岸 = 卸货口岸，不必然等于报关口岸 |
 | 交叉验证 | 建议与 UN COMTRADE（CIF 口径）对照，注意两者系统性计价差异 |
 """, unsafe_allow_html=True)
@@ -651,7 +667,6 @@ with tab7:
 | HHI | Σ s²（份额以小数计），取值 0-1，越高越集中 |
 | 熵指数 | −Σ s·ln(s)，并按 ln(N) 归一化便于跨期比较 |
 | 多元化指数 | 1 − HHI |
-| 单价（近似） | 进口额 ÷ 海运+空运毛重（美元/千克）；因部分月份无重量数据，仅作参考 |
 | 事件窗口 | 以 2024-09（301 关税调整生效）为时点，前后各 N 个月对比 |
 """, unsafe_allow_html=True)
 
