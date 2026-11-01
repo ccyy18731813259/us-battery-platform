@@ -70,11 +70,9 @@ state_df = D.load_state()
 port_df = D.load_port()
 
 mat = D.monthly_by_country(state_df)          # 月度 × 国家 金额
-wmat = D.monthly_weights(state_df)            # 月度 × 国家 毛重
 tot, share = D.with_shares(mat)               # 总额 & 份额
 conc = D.concentration(share, 5)              # CR5 / HHI / 熵
 conc10 = D.concentration(share, 10)
-uprice = D.unit_price(mat, wmat)              # 单价代理
 
 st.markdown(f"""
 <div class="hero">
@@ -270,27 +268,33 @@ tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs(
 with tab1:
     tot_sel = agg_series(tot)
     yoy_tot = D.yoy(tot)
-    china_share_last = share.loc[LAST_M, "中国"] if "中国" in share.columns else np.nan
-    china_share_yoy = china_share_last - (share.loc[MONTHS[-13], "中国"] if len(MONTHS) > 13 else np.nan)
+    # KPI 参考月 = 所选区间末端月，随侧边栏「数据周期」联动
+    ref_m = m1
+    ref_m12 = ref_m - 12
+    has_m12 = ref_m12 in share.index
+    china_share_ref = share.loc[ref_m, "中国"] if "中国" in share.columns else np.nan
+    china_share_chg = china_share_ref - share.loc[ref_m12, "中国"] if has_m12 and "中国" in share.columns else np.nan
+    cr5_ref = conc.loc[ref_m, "CR5"]
+    cr5_prev = conc.loc[ref_m12, "CR5"] if has_m12 else None
 
     def _delta_html(text, kind):
         if not text:
             return ""
         return f'<div class="kpi-delta"><span class="pd-{kind}">{text}</span></div>'
 
-    _v1 = f"{tot.loc[LAST_M]/1e8:,.2f} 亿美元"
-    _d1 = f"{yoy_tot.loc[LAST_M]:+.1f}% 同比" if pd.notna(yoy_tot.loc[LAST_M]) else None
+    _v1 = f"{tot.loc[ref_m]/1e8:,.2f} 亿美元"
+    _d1 = f"{yoy_tot.loc[ref_m]:+.1f}% 同比" if pd.notna(yoy_tot.loc[ref_m]) else None
     _v5 = f"{tot.loc[sel_range[-12:] if len(sel_range)>=12 else sel_range].sum()/1e8:,.1f} 亿美元"
     kpi_html = f"""
 <div class="kpi-row">
-  <div class="kpi"><div class="kpi-label">{LAST_M} 当月进口额</div>
+  <div class="kpi"><div class="kpi-label">{ref_m} 当月进口额</div>
     <div class="kpi-value">{_v1}</div>{_delta_html(_d1, "neg" if (_d1 and not _d1.startswith("+")) else "pos")}</div>
-  <div class="kpi"><div class="kpi-label">{LAST_M} 中国份额</div>
-    <div class="kpi-value">{china_share_last:.1f}%</div>{_delta_html(f"{china_share_yoy:+.1f} pp 较去年同期", "flat")}</div>
+  <div class="kpi"><div class="kpi-label">{ref_m} 中国份额</div>
+    <div class="kpi-value">{china_share_ref:.1f}%</div>{_delta_html(f"{china_share_chg:+.1f} pp 较去年同期" if pd.notna(china_share_chg) else None, "flat")}</div>
   <div class="kpi"><div class="kpi-label">CR5 集中度</div>
-    <div class="kpi-value">{conc.loc[LAST_M,'CR5']:.1f}%</div>{_delta_html(f"12个月前 {conc.loc[MONTHS[-13],'CR5']:.1f}%" if len(MONTHS) > 13 else None, "flat")}</div>
+    <div class="kpi-value">{cr5_ref:.1f}%</div>{_delta_html(f"12个月前 {cr5_prev:.1f}%" if cr5_prev is not None else None, "flat")}</div>
   <div class="kpi"><div class="kpi-label">HHI 指数</div>
-    <div class="kpi-value">{conc.loc[LAST_M,'HHI']:.3f}</div>{_delta_html("0-1，越高越集中", "flat")}</div>
+    <div class="kpi-value">{conc.loc[ref_m,'HHI']:.3f}</div>{_delta_html("0-1，越高越集中", "flat")}</div>
   <div class="kpi"><div class="kpi-label">近12个月累计进口</div>
     <div class="kpi-value">{_v5}</div></div>
 </div>"""
@@ -403,19 +407,25 @@ with tab2:
 with tab3:
     china_v = mat["中国"]
     china_share_s = share["中国"]
-    china_up = uprice["中国"]
-    china_up_last = china_up.dropna().iloc[-1] if china_up.notna().any() else np.nan
-    c1, c2, c3, c4 = st.columns(4)
-    c1.metric(f"{LAST_M} 自华进口额", f"{china_v.loc[LAST_M]/1e8:.2f} 亿美元",
-              f"同比 {D.yoy(china_v).loc[LAST_M]:+.1f}%" if pd.notna(D.yoy(china_v).loc[LAST_M]) else None,
-              border=True)
-    c2.metric(f"{LAST_M} 中国份额", f"{china_share_s.loc[LAST_M]:.1f}%",
-              f"近12个月均值 {china_share_s.loc[sel_range[-12:]].mean():.1f}%" if len(sel_range) >= 12 else None,
-              delta_color="off", border=True)
-    c3.metric("份额峰值（2017年以来）", f"{china_share_s.max():.1f}%",
-              f"出现在 {china_share_s.idxmax()}", delta_color="off", border=True)
-    c4.metric("近期单价（美元/kg）", f"{china_up_last:,.1f}" if pd.notna(china_up_last) else "—",
-              "金额÷海运+空运毛重", delta_color="off", border=True)
+
+    _c_yoy = D.yoy(china_v).loc[ref_m]
+    _d1 = f"同比 {_c_yoy:+.1f}%" if pd.notna(_c_yoy) else None
+    _d1_kind = "neg" if (pd.notna(_c_yoy) and _c_yoy < 0) else "pos"
+    _d2 = f"近12个月均值 {china_share_s.loc[sel_range[-12:]].mean():.1f}%" if len(sel_range) >= 12 else None
+    # 峰值在所选区间内计算，随「数据周期」联动
+    _share_sel = china_share_s.loc[sel_range]
+    _peak_v = _share_sel.max()
+    _peak_m = _share_sel.idxmax()
+    _kpi3 = f"""
+<div class="kpi-row">
+  <div class="kpi"><div class="kpi-label">{ref_m} 自华进口额</div>
+    <div class="kpi-value">{china_v.loc[ref_m]/1e8:,.2f} 亿美元</div>{_delta_html(_d1, _d1_kind)}</div>
+  <div class="kpi"><div class="kpi-label">{ref_m} 中国份额</div>
+    <div class="kpi-value">{china_share_s.loc[ref_m]:.1f}%</div>{_delta_html(_d2, "flat")}</div>
+  <div class="kpi"><div class="kpi-label">份额峰值（所选区间）</div>
+    <div class="kpi-value">{_peak_v:.1f}%</div>{_delta_html(f"出现在 {_peak_m}", "flat")}</div>
+</div>"""
+    st.markdown(_kpi3, unsafe_allow_html=True)
 
     sec("自华进口额与份额双轴走势", "柱=自华月度进口额（亿美元），线=份额（%，右轴）")
     fig = go.Figure()
@@ -673,9 +683,7 @@ with tab7:
     sec("使用提示")
     st.markdown("""
 - 侧边栏可切换 **当月值 / 12 个月滚动累计** 口径与时间范围；滚动口径适合看趋势，当月口径适合看拐点与政策冲击。
-- 「中国竞争力」页的单价为**重量口径近似值**：动力电池重、消费电池轻，国别产品结构差异会直接影响该指标，解读时需结合产品结构。
 - 政策冲击为描述性前后对比（事件研究图表），未控制同期宏观因素（如美国本土产能爬坡、需求周期），因果推断需谨慎。
-- 早期年份（2017 前后）部分月份重量为空（接口未提供），相关单价指标自动缺失。
 """, unsafe_allow_html=True)
 
     st.markdown("---")
