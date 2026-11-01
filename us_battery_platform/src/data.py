@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 """
 美国锂离子电池（HS 850760）进口监测平台 —— 数据层
-数据来源：US Census Bureau API（imports/state-hs、imports/port-hs）
+数据来源：USA Trade Online（美国普查局），HS 六位编码 850760；
+自动更新经由 Census 国际贸易 API（imports/statehs、imports/porths，与 USA Trade Online 同源）
 口径：一般进口海关价值（美元），原产国口径，月度
 """
 import hashlib

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
-美国 Census Bureau 国际贸易 API 自动更新模块
-端点：imports/state-hs、imports/porths（HS 850760，月度，原产国口径）
+美国 Census 国际贸易 API 自动更新模块（数据与 USA Trade Online 同源，HS 六位编码 850760）
+端点：imports/statehs、imports/porths（HS 850760，月度，原产国口径）
 策略：本地 Parquet 缓存（data/processed/）→ 增量拉取缺失月份 → 失败时回退 Excel
 API Key 免费申请：https://api.census.gov/data/key_signup.html
 """

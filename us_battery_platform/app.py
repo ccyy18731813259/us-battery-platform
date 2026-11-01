@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 美国锂离子电池（HS 850760）进口监测平台
-中国份额与竞争力动态监测 · 基于 US Census 月度贸易数据
+中国份额与竞争力动态监测 · 基于 USA Trade Online（美国普查局）月度贸易数据，HS 六位编码 850760
 运行：streamlit run app.py
 """
 import numpy as np
@@ -78,7 +78,7 @@ st.markdown(f"""
 <div class="hero">
   <h1>🔋 美国锂离子电池进口监测平台</h1>
   <p>HS 850760 · 锂离子蓄电池 &nbsp;|&nbsp; 原产国口径 · 一般进口海关价值 &nbsp;|&nbsp;
-     数据源：US Census Bureau（州/口岸明细）· 月度更新至 {mat.index[-1]} &nbsp;|&nbsp; 重点监测：中国份额与竞争力变迁</p>
+     数据源：USA Trade Online（美国普查局）HS 850760 · 月度更新至 {mat.index[-1]} &nbsp;|&nbsp; 重点监测：中国份额与竞争力变迁</p>
 </div>""", unsafe_allow_html=True)
 
 MONTHS = list(mat.index)
@@ -655,8 +655,8 @@ with tab7:
     st.markdown("""
 | 项目 | 说明 |
 |---|---|
-| 产品范围 | HS **850760** 锂离子蓄电池（2017 年起独立子目，全球口径连续可比） |
-| 数据来源 | US Census Bureau 国际贸易 API（`imports/state-hs`、`imports/porths`），美国官方进口统计 |
+| 产品范围 | HS **850760** 锂离子蓄电池。自 HS 2012 版修订（2012 年）起设为独立六位子目，口径连续可比；本平台数据区间为 2017-01 至今（受数据获取范围限制） |
+| 数据来源 | **USA Trade Online**（美国普查局官方数据库），按 HS 六位编码 850760 检索，口径为一般进口海关价值；平台自动更新通过 Census 国际贸易 API（`imports/statehs`、`imports/porths`，与 USA Trade Online 同源）实现 |
 | 数据更新 | **自动增量更新**：打开平台时探测 API 最新月份，发现新数据自动拉取；也可在侧边栏手动点击「检查并更新数据」 |
 | API Key | 在 api.census.gov/data/key_signup.html 免费申请，填入侧边栏后保存在服务端本地（不随页面暴露） |
 | 本地缓存 | API 数据写入 Parquet 缓存（增量式，支持官方数据修订重拉）；缓存缺失时自动回退到 `data/raw/` 的 Excel |
@@ -687,4 +687,4 @@ with tab7:
 """, unsafe_allow_html=True)
 
     st.markdown("---")
-    st.caption("平台用于研究监测，数据以 US Census Bureau 官方发布为准 · 生成时间：2026-10")
+    st.caption("平台用于研究监测，数据以 USA Trade Online / 美国普查局官方发布为准 · 生成时间：2026-10")
