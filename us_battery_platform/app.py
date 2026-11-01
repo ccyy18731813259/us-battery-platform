@@ -460,7 +460,7 @@ with tab3:
 # TAB 4 集中度与多元化
 # ==================================================================
 with tab4:
-    sec("市场集中度：CR5 与 HHI", "CR5=前五大来源国份额合计；HHI=各国份额（小数）平方和，取值 0-1，越高越集中")
+    sec("市场集中度：CR5 与 CR10", "CR5=前五大来源国份额合计；CR10=前十大来源国份额合计，CR10−CR5 的差距越大，说明第 6~10 名来源国的重要性越高")
     fig = go.Figure()
     fig.add_scatter(x=T, y=conc["CR5"], name="CR5（%）", line=dict(color=BLUE, width=2.2))
     fig.add_scatter(x=T, y=conc10["CR10"], name="CR10（%）", line=dict(color="#7FB3D5", width=1.8, dash="dot"))
