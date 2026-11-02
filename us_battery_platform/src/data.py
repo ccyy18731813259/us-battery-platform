@@ -13,7 +13,7 @@ import pandas as pd
 import streamlit as st
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-RAW_FILE = os.path.join(BASE_DIR, "data", "raw", "850760_美国进口数据_2017-2026.xlsx")
+RAW_FILE = os.path.join(BASE_DIR, "data", "raw", "850760_美国进口数据_2012-2026.xlsx")
 CACHE_DIR = os.path.join(BASE_DIR, "data", "processed")
 os.makedirs(CACHE_DIR, exist_ok=True)
 
@@ -81,9 +81,19 @@ def _cn(name: str) -> str:
 
 
 # ---------------------------------------------------------------- 原始数据读取
+def _detect_header_row(path: str, sheet: str, max_scan: int = 12) -> int:
+    """自动定位表头行：返回首个包含「国家名称」的行号（兼容不同导出版式）"""
+    probe = pd.read_excel(path, sheet_name=sheet, header=None, nrows=max_scan)
+    for i in range(len(probe)):
+        row = [str(v) for v in probe.iloc[i].tolist()]
+        if any("国家名称" in v for v in row):
+            return i
+    return 5
+
+
 def _read_sheet(sheet: str, code_col: str, name_col: str, code_en: str, name_en: str) -> pd.DataFrame:
     """读取单个 sheet 并做基础清洗，返回长表。code_col/name_col 为地理维度的中文列名"""
-    df = pd.read_excel(RAW_FILE, sheet_name=sheet, header=5)
+    df = pd.read_excel(RAW_FILE, sheet_name=sheet, header=_detect_header_row(RAW_FILE, sheet))
     df = df.rename(columns={
         "国家名称（原产国）": "country_raw", "月份": "month",
         code_col: code_en, name_col: name_en,
@@ -95,6 +105,8 @@ def _read_sheet(sheet: str, code_col: str, name_col: str, code_en: str, name_en:
     df["country"] = df["country_raw"].map(_cn)
     df["month"] = pd.PeriodIndex(pd.to_datetime(df["month"], format="%Y-%m"), freq="M")
     for c in ["value", "w_sea", "w_air"]:
+        if c not in df.columns:      # 新版导出（2012 起）不含重量列，补 0 以保持表结构一致
+            df[c] = 0.0
         df[c] = pd.to_numeric(df[c], errors="coerce").fillna(0)
     df["w_total"] = df["w_sea"] + df["w_air"]
     return df
@@ -219,7 +231,7 @@ def event_study(mat: pd.DataFrame, share: pd.DataFrame, window: int = 12,
     post_s = share.loc[post_idx].mean()
 
     out = pd.DataFrame({
-        "国家": mat.columns,
+        "来源地": mat.columns,
         "政策前月均(百万美元)": pre_v.values / 1e6,
         "政策后月均(百万美元)": post_v.values / 1e6,
         "政策前份额(%)": pre_s.values,

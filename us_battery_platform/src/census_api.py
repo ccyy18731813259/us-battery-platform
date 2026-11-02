@@ -58,7 +58,7 @@ PARQUET_FILES = {"state": os.path.join(CACHE_DIR, "state.parquet"),
 META_FILE = os.path.join(CACHE_DIR, "api_meta.json")
 KEY_FILE = os.path.join(CACHE_DIR, "census_key.txt")
 
-START_MONTH = pd.Period("2017-01", freq="M")
+START_MONTH = pd.Period("2012-01", freq="M")
 
 
 class CensusAPIError(Exception):
