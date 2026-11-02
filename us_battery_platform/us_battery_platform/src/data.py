@@ -6,7 +6,9 @@
 口径：一般进口海关价值（美元），原产国口径，月度
 """
 import hashlib
+import json
 import os
+from datetime import datetime
 
 import numpy as np
 import pandas as pd
@@ -15,6 +17,7 @@ import streamlit as st
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 RAW_FILE = os.path.join(BASE_DIR, "data", "raw", "850760_美国进口数据_2012-2026.xlsx")
 CACHE_DIR = os.path.join(BASE_DIR, "data", "processed")
+CACHE_META = os.path.join(CACHE_DIR, "cache_meta.json")
 os.makedirs(CACHE_DIR, exist_ok=True)
 
 # ---------------------------------------------------------------- 国家名称映射
@@ -154,23 +157,122 @@ def _parquet_sig(kind: str):
     return (0, 0)
 
 
+# ---------------------------------------------------------------- 缓存版本校验
+# 目的：替换 data/raw 下的 Excel（例如从 2017-2026 换成 2012-2026）后，
+# 若仍优先读旧 parquet，平台会继续显示旧年份区间。故用源文件哈希做版本校验。
+def _read_cache_meta() -> dict:
+    if os.path.exists(CACHE_META):
+        try:
+            return json.load(open(CACHE_META, encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return {}
+    return {}
+
+
+def _write_cache_meta(meta: dict):
+    os.makedirs(CACHE_DIR, exist_ok=True)
+    with open(CACHE_META, "w", encoding="utf-8") as f:
+        json.dump(meta, f, ensure_ascii=False, indent=2)
+
+
+def _excel_md5() -> str:
+    """原始 Excel 内容哈希（按 mtime/size 缓存，避免每次 rerun 重算 4MB）"""
+    st_ = os.stat(RAW_FILE)
+    return _excel_md5_cached(st_.st_mtime, st_.st_size)
+
+
+@st.cache_data(show_spinner=False)
+def _excel_md5_cached(mtime: float, size: int) -> str:
+    return _file_hash()
+
+
+def _write_cache(kind: str, df: pd.DataFrame, md5: str):
+    """把 Excel 数据落成 parquet 缓存，并记录源文件哈希"""
+    seed = df.copy()
+    seed["month"] = seed["month"].astype(str)
+    seed.to_parquet(_PARQUET[kind], index=False)
+    meta = _read_cache_meta()
+    meta[kind] = {
+        "excel_md5": md5,
+        "rows": int(len(seed)),
+        "first_month": str(seed["month"].min()),
+        "last_month": str(seed["month"].max()),
+        "built_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+    }
+    _write_cache_meta(meta)
+
+
+def _cache_ok(kind: str, md5: str) -> bool:
+    """parquet 缓存是否与当前 Excel 同源。无记录时用月份跨度判断（防旧缓存残留）"""
+    p = _PARQUET[kind]
+    if not os.path.exists(p):
+        return False
+    rec = _read_cache_meta().get(kind, {})
+    if rec.get("excel_md5"):
+        return rec["excel_md5"] == md5
+    # 老缓存无版本记录：parquet 起始月晚于 Excel 起始月即视为过期
+    try:
+        sheet = _SHEET_CONF[f"load_{kind}"][0]
+        p_first = pd.read_parquet(p, columns=["month"])["month"].astype(str).min()
+        x_first = pd.read_excel(RAW_FILE, sheet_name=sheet, header=_detect_header_row(RAW_FILE, sheet),
+                                usecols=["月份"])["月份"].astype(str).min()
+        return p_first <= x_first
+    except Exception:  # noqa: BLE001 - 读取失败时按过期处理，走重建
+        return False
+
+
+def _adopt_cache_meta(kind: str, md5: str):
+    """沿用现有 parquet 时补记版本信息（老仓库首次升级到本版本）"""
+    try:
+        months = pd.read_parquet(_PARQUET[kind], columns=["month"])["month"].astype(str)
+        meta = _read_cache_meta()
+        meta[kind] = {
+            "excel_md5": md5, "rows": int(len(months)),
+            "first_month": months.min(), "last_month": months.max(),
+            "built_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        }
+        _write_cache_meta(meta)
+    except Exception:  # noqa: BLE001 - 元信息只用于自检，写失败不影响主流程
+        pass
+
+
+def cache_info() -> dict:
+    """当前缓存元信息，供界面做数据版本自检"""
+    meta = _read_cache_meta()
+    rec = meta.get("state", {})
+    return {
+        "source": os.path.basename(RAW_FILE),
+        "first_month": rec.get("first_month"),
+        "last_month": rec.get("last_month"),
+        "built_at": rec.get("built_at"),
+    }
+
+
 def st_cache_data_clear():
     """数据更新后清除全部缓存，强制重新加载"""
     st.cache_data.clear()
 
 
+def _load_kind(kind: str) -> pd.DataFrame:
+    md5 = _excel_md5()
+    if _cache_ok(kind, md5):
+        if not _read_cache_meta().get(kind, {}).get("excel_md5"):
+            _adopt_cache_meta(kind, md5)
+        return _load_parquet(_parquet_sig(kind), kind)
+    df = _load_sheet(md5, *_SHEET_CONF[f"load_{kind}"])
+    try:
+        _write_cache(kind, df, md5)
+    except OSError:      # 只读文件系统等情况下仍可正常使用
+        pass
+    return df
+
+
 def load_state() -> pd.DataFrame:
-    sig = _parquet_sig("state")
-    if sig != (0, 0):
-        return _load_parquet(sig, "state")
-    return _load_sheet(_file_hash(), *_SHEET_CONF["load_state"])
+    return _load_kind("state")
 
 
 def load_port() -> pd.DataFrame:
-    sig = _parquet_sig("port")
-    if sig != (0, 0):
-        return _load_parquet(sig, "port")
-    return _load_sheet(_file_hash(), *_SHEET_CONF["load_port"])
+    return _load_kind("port")
 
 
 # ---------------------------------------------------------------- 指标计算

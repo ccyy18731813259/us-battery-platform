@@ -829,6 +829,15 @@ with tab7:
 | 交叉验证 | 建议与 UN COMTRADE（CIF 口径）对照，注意两者系统性计价差异 |
 """, unsafe_allow_html=True)
 
+    _ci = D.cache_info()
+    st.caption(
+        f"**数据版本自检**：当前载入 {MONTHS[0]} – {LAST_M}（{len(MONTHS)} 个月）"
+        f" · 数据文件 `{_ci['source']}`"
+        f" · 缓存构建于 {_ci['built_at'] or '—'}。"
+        " 若此处显示的起始年份与数据文件不符，说明平台仍在读取旧缓存，请在侧边栏点击「检查并更新数据」，"
+        "或在 Streamlit Cloud 的 Manage app → Reboot app 重启应用。"
+    )
+
     sec("指标定义")
     st.markdown("""
 | 指标 | 定义 |
