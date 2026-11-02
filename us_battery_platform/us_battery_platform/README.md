@@ -18,7 +18,7 @@ streamlit run app.py
 
 - 数据源（双通道，自动切换）：
   1. **US Census API 自动更新**（推荐）：平台启动时自动探测最新月份并增量拉取；需在侧边栏填入免费 API Key（[申请地址](https://api.census.gov/data/key_signup.html)），写入 `data/processed/census_key.txt` 或环境变量 `CENSUS_API_KEY`
-  2. **Excel 导出回退**：`data/raw/850760_美国进口数据_2017-2026.xlsx`（API 不可达时自动使用）
+  2. **Excel 导出回退**：`data/raw/850760_美国进口数据_2012-2026.xlsx`（API 不可达时自动使用）
 - API 数据落盘为 Parquet 缓存（`data/processed/state.parquet`、`port.parquet`），按月增量、支持官方修订重拉；侧边栏提供「全量重建」
 - 包含两个数据维度：
   - `State_目的地州`：国家 × 月份 × 美州 × 进口额/重量
