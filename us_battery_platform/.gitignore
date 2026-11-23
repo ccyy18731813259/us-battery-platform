@@ -1,0 +1,27 @@
+# 缓存与密钥：只提交 parquet 与元信息（加速云端首屏），密钥与备份不入库
+data/processed/*
+!data/processed/state.parquet
+!data/processed/port.parquet
+!data/processed/api_meta.json
+!data/processed/cache_meta.json
+data/processed/_backup_*/
+
+# 旧版数据文件（2017 起）不入库，仅保留 2012 年起的完整版
+data/raw/*2017-2026.xlsx
+
+# 本地缓存与配置
+__pycache__/
+*.pyc
+.workbuddy/
+*.genie
+.streamlit/secrets.toml
+
+# 本地测试临时文件
+_tmp/
+
+# 本地预览临时文件
+_preview/
+
+# 深色主题预览临时文件
+_shot/
+_edtest/
