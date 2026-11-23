@@ -260,6 +260,11 @@ def st_cache_data_clear():
 
 
 def _load_kind(kind: str) -> pd.DataFrame:
+    # 云端仓库可能只带 parquet 缓存而没有原始 Excel：此时直接用缓存，不让平台崩掉
+    if not os.path.exists(RAW_FILE):
+        if os.path.exists(_PARQUET[kind]):
+            return _load_parquet(_parquet_sig(kind), kind)
+        raise FileNotFoundError(f"缺少数据文件：{RAW_FILE}（且无 parquet 缓存可用）")
     md5 = _excel_md5()
     if _cache_ok(kind, md5):
         if not _read_cache_meta().get(kind, {}).get("excel_md5"):

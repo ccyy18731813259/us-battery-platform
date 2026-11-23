@@ -80,7 +80,14 @@ def _sig() -> tuple:
     return tuple(out)
 
 
-def data() -> pd.DataFrame:
+def available() -> bool:
+    """两个 10 位品类 Excel 是否齐全（云端漏传时界面降级为提示，不报错）"""
+    return os.path.exists(FILE_EV) and os.path.exists(FILE_OTHER)
+
+
+def data() -> pd.DataFrame | None:
+    if not available():
+        return None
     return load_hts10(_sig())
 
 

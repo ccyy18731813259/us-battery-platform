@@ -393,6 +393,9 @@ CAT_COLORS = {"车用动力电池": "#2E86AB", "其他锂电": "#E8A33D",
 
 def _policy_hts10(w: int):
     """政策冲击页 · 10 位 HTS 品类视图（车用动力电池 / 其他锂电 / 储能电池系统）"""
+    if not H.available():
+        st.info("10 位 HTS 品类数据文件（data/raw/hts10/ 下两个 Excel）未随部署上传，该视图暂不可用；其余分析不受影响。")
+        return
     d = H.data()
     m = H.mat_cat(d).reindex(columns=["车用动力电池", "其他锂电"]).fillna(0)
     s = H.share_of_total(m)
